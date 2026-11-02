@@ -4,8 +4,9 @@ Wraps [paulomac1000/ha-mcp-readonly](https://github.com/paulomac1000/ha-mcp-read
 add-on, so an AI agent (Claude Code) can read entities and states, render templates and read the
 core and add-on logs, and nothing else.
 
-How it is reached from outside - the Cloudflare host, Access and the client config - is owned by
-`docs/network.md` in [Home-Assistant-Config](https://github.com/YuvalWS/Home-Assistant-Config).
+This file owns the add-on. How it is reached from outside - the Cloudflare host, Access, the
+client and the full setup order - is owned by `docs/network.md` ("The RO MCP host") in
+[Home-Assistant-Config](https://github.com/YuvalWS/Home-Assistant-Config); start there.
 
 ## Security model - read before changing anything
 
@@ -31,7 +32,8 @@ How it is reached from outside - the Cloudflare host, Access and the client conf
    - `public_hostname` - the hostname the tunnel publishes, e.g. `ha-ro-mcp.yuweiss.uk`.
    - `mcp_auth_token` - at least 32 random characters. Generate one with
      `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` and keep it in your
-     password manager; the client needs the same value.
+     password manager; the client sends the same value (the cloud environment's network secret,
+     step 6 of the setup in `docs/network.md`).
 3. **Start** it and check the **Log** tab: the server should report it is listening on
    `0.0.0.0:9092`. If its tools later report `401`/`403` from HA, the Supervisor proxy is refusing
    an endpoint - note which one.
