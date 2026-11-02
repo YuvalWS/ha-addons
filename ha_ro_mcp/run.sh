@@ -1,5 +1,6 @@
 #!/bin/sh
-# Maps the add-on options onto the environment the upstream server reads.
+# Maps the add-on options onto the environment the upstream server reads, and
+# puts shim.py between the server and the Supervisor (why: shim.py's header).
 set -eu
 
 opt() {
@@ -18,13 +19,31 @@ if [ -z "$PUBLIC_HOSTNAME" ]; then
     exit 1
 fi
 
-# Upstream's cleartext-HTTP guard resolves a hostname to its IP and drops the
-# URL path, which would turn http://supervisor/core into the Supervisor's own
-# API. A literal private IP is passed through unchanged, so resolve it here.
-SUPERVISOR_IP=$(getent hosts supervisor | cut -d' ' -f1)
+LOCAL_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+LOCAL_TOKEN="$LOCAL_TOKEN" python3 /shim.py &
 
-export HA_URL="http://${SUPERVISOR_IP}/core"
-export HA_TOKEN="$SUPERVISOR_TOKEN"
+# Startup check, so the log says whether HA answers before any tool is called.
+LOCAL_TOKEN="$LOCAL_TOKEN" python3 - <<'PY'
+import os, time, urllib.error, urllib.request
+request = urllib.request.Request(
+    "http://127.0.0.1:8099/api/", headers={"Authorization": f"Bearer {os.environ['LOCAL_TOKEN']}"}
+)
+for attempt in range(20):
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            print(f"HA API check: HTTP {response.status}", flush=True)
+            break
+    except urllib.error.HTTPError as err:
+        print(f"HA API check: HTTP {err.code} {err.read()[:200]!r}", flush=True)
+        break
+    except OSError:
+        time.sleep(0.5)
+else:
+    print("HA API check: shim did not start", flush=True)
+PY
+
+export HA_URL=http://127.0.0.1:8099
+export HA_TOKEN="$LOCAL_TOKEN"
 export HA_CONFIG_PATH=/homeassistant
 export MCP_TRANSPORT=http
 export MCP_BIND_HOST=0.0.0.0
@@ -33,4 +52,4 @@ export MCP_ALLOWED_HOSTS="${PUBLIC_HOSTNAME},localhost,127.0.0.1"
 # Template rendering lives in the dev tools.
 export MCP_DEV_TOOLS_ENABLED=1
 
-exec ha-mcp-readonly
+exec env -u SUPERVISOR_TOKEN ha-mcp-readonly

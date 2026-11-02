@@ -7,4 +7,5 @@ FROM ghcr.io/paulomac1000/ha-mcp-readonly:v2.3.0@sha256:575dd60dc3a5bb7d1f0de479
 # HA's .storage registries (0600). The config mount is read-only either way.
 USER root
 COPY --chmod=755 run.sh /run.sh
+COPY shim.py /shim.py
 ENTRYPOINT ["/run.sh"]
